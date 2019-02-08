@@ -1,6 +1,7 @@
 #include "idenLib.h"
 
-bool GetOpcodeBuf(__in PBYTE funcVa, __in const SIZE_T length, __out PBYTE& opcodeBuf, __out ULONG& sizeOfBuf)
+_Success_(return)
+bool GetOpcodeBuf(__in PBYTE funcVa, __in SIZE_T length, __out PCHAR& opcodesBuf)
 {
 	ZydisDecoder decoder;
 
@@ -9,23 +10,25 @@ bool GetOpcodeBuf(__in PBYTE funcVa, __in const SIZE_T length, __out PBYTE& opco
 	ZyanUSize offset = 0;
 	ZydisDecodedInstruction instruction;
 
-	opcodeBuf = static_cast<PBYTE>(malloc(length)); // // we need to resize the buffer
-	if (!opcodeBuf)
+	auto cSize = length * 2;
+	opcodesBuf = static_cast<PCHAR>(malloc(cSize)); // // we need to resize the buffer
+	if (!opcodesBuf)
 	{
 		return false;
 	}
-	size_t counter = 0;
+	SIZE_T counter = 0;
 	while (ZYAN_SUCCESS(ZydisDecoderDecodeBuffer(&decoder, funcVa + offset, length - offset,
 		&instruction)))
 	{
-		opcodeBuf[counter++] = instruction.opcode;
+		CHAR opcode[3];
+		sprintf_s(opcode, "%02x", instruction.opcode);
+
+		memcpy_s(opcodesBuf + counter, cSize - counter, opcode, sizeof(opcode));
+		counter += 2;
 
 		offset += instruction.length;
 	}
-	opcodeBuf = static_cast<PBYTE>(realloc(opcodeBuf, counter));
-	if (!opcodeBuf)
-		return false;
-	sizeOfBuf = counter;
+	opcodesBuf = static_cast<PCHAR>(realloc(opcodesBuf, counter + 1)); // +1 for 0x00
 
 	return counter != 0;
 }
@@ -39,26 +42,34 @@ void Split(__in const std::string& str, __out std::vector<std::string>& cont)
 		std::back_inserter(cont));
 }
 
-bool getSig(const fs::path& sig, std::unordered_map<std::wstring, std::wstring> &uniqHashFuncName)
+bool getSig(fs::path& sigPath, std::unordered_map<std::wstring, std::wstring> &funcSignature)
 {
-	std::ifstream inputFile{ sig };
-	std::string line;
-	while (std::getline(inputFile, line))
+	PBYTE decompressedData = nullptr;
+	if (!DecompressFile(sigPath, decompressedData) || !decompressedData)
+	{
+		return false;
+	}
+	char seps[] = "\n";
+	char* next_token = nullptr;
+	char* line = strtok_s(reinterpret_cast<char*>(decompressedData), seps, &next_token);
+	while (line != nullptr)
 	{
 		std::vector<std::string> vec{};
 		Split(line, vec);
 		if (vec.size() != 2)
 		{
-			wprintf(L"[!] SIG file contains a malformed data, SIGpath: %s\n", sig.c_str());
-			break;
+			return false;
 		}
-		// vec[0] md5_hash
+		// vec[0] opcode
 		// vec[1] name
-		std::wstring wHashStr(vec[0].begin(), vec[0].end());
+		std::wstring wOpcodeStr(vec[0].begin(), vec[0].end());
 		std::wstring wNameStr(vec[1].begin(), vec[1].end());
-		uniqHashFuncName[wHashStr] = wNameStr;
+		funcSignature[wOpcodeStr] = wNameStr;
+		line = strtok_s(nullptr, seps, &next_token);
 	}
-	inputFile.close(); // close handle
+
+	if (decompressedData)
+		delete[] decompressedData;
 
 	return true;
 }
@@ -68,9 +79,8 @@ bool cbIdenLib(int argc, char * argv[])
 	DbgCmdExecDirect("analyze"); // Do function analysis.
 	DbgCmdExecDirect("analyse_nukem"); // Do function analysis using nukem’s algorithm.
 
-	auto hashVar = Md5Hash();
 	size_t counter = 0;
-	std::unordered_map<std::wstring, std::wstring> uniqHashFuncName;
+	std::unordered_map<std::wstring, std::wstring> funcSignature;
 	ListInfo functionList{};
 	if (!Script::Function::GetList(&functionList)) {
 		return false;
@@ -90,7 +100,7 @@ bool cbIdenLib(int argc, char * argv[])
 	const fs::path sigFolder{ SymExDir };
 	if (!fs::exists(sigFolder)) {
 		const auto path = fs::absolute(sigFolder).string().c_str();
-		GuiAddLogMessage("[! idenLib] Following path does not exist:");
+		GuiAddLogMessage("[idenLib] Following path does not exist:");
 		GuiAddLogMessage(path);
 		return false;
 	}
@@ -103,7 +113,7 @@ bool cbIdenLib(int argc, char * argv[])
 		{
 			continue;
 		}
-		const auto& currentPath = p.path();
+		auto currentPath = p.path();
 		if (fs::is_regular_file(currentPath, ec))
 		{
 			if (ec.value() != STATUS_SUCCESS)
@@ -111,7 +121,7 @@ bool cbIdenLib(int argc, char * argv[])
 				continue;
 			}
 
-			getSig(currentPath, uniqHashFuncName);
+			getSig(currentPath, funcSignature);
 
 		}
 	}
@@ -132,20 +142,21 @@ bool cbIdenLib(int argc, char * argv[])
 			}
 
 			std::string fName{ funcName };
-			PBYTE opcodeBuf = nullptr;
+			PCHAR opcodesBuf = nullptr;
 			DWORD sizeofBuf = 0;
 
-			if (GetOpcodeBuf(moduleMemory + fList[i].rvaStart, codeSize, opcodeBuf, sizeofBuf) && opcodeBuf)
+			if (GetOpcodeBuf(moduleMemory + fList[i].rvaStart, codeSize, opcodesBuf) && opcodesBuf)
 			{
-				std::wstring hashDig = hashVar.HashData(opcodeBuf, sizeofBuf);
-				if (uniqHashFuncName.find(hashDig) != uniqHashFuncName.end())
+				std::string cOpcodes{ opcodesBuf };
+				std::wstring wOpcodes{ cOpcodes.begin(), cOpcodes.end() };
+				if (funcSignature.find(wOpcodes) != funcSignature.end())
 				{
-					std::string currFuncName{ uniqHashFuncName[hashDig].begin(), uniqHashFuncName[hashDig].end() };
+					std::string currFuncName{ funcSignature[wOpcodes].begin(), funcSignature[wOpcodes].end() };
 					DbgSetAutoLabelAt(codeStart, currFuncName.c_str());
 					counter++;
 				}
 
-				free(opcodeBuf);
+				free(opcodesBuf);
 			}
 
 		}
@@ -162,133 +173,4 @@ bool cbIdenLib(int argc, char * argv[])
 
 
 	return true;
-}
-
-Md5Hash::Md5Hash()
-{
-	this->pbHashObject = nullptr;
-	this->pbHash = nullptr;
-	this->hHash = nullptr;
-	this->phAlgorithm = nullptr;
-	this->cbHash = 0;
-
-	ULONG cbResult{};
-
-
-	// The BCryptOpenAlgorithmProvider function loads and initializes a CNG provider.
-	if (!NT_SUCCESS(this->Status = BCryptOpenAlgorithmProvider(
-		&this->phAlgorithm,
-		BCRYPT_MD5_ALGORITHM,
-		nullptr,
-		BCRYPT_HASH_REUSABLE_FLAG)))
-	{
-		wprintf(L"[!] Error 0x%lx BCryptOpenAlgorithmProvider\n", this->Status);
-		return;
-	}
-
-	// HASH LENGTH
-	if (!NT_SUCCESS(this->Status = BCryptGetProperty(
-		this->phAlgorithm,
-		BCRYPT_HASH_LENGTH,
-		reinterpret_cast<PBYTE>(&this->cbHash),
-		sizeof(DWORD),
-		&cbResult,
-		0)))
-	{
-		wprintf(L"[!] Error 0x%lx BCryptGetProperty\n", this->Status);
-		return;
-	}
-
-	// The BCryptCreateHash function is called to create a md5_hash or Message Authentication Code (MAC) object.
-	if (!NT_SUCCESS(this->Status = BCryptCreateHash(
-		this->phAlgorithm,
-		&this->hHash,
-		nullptr,
-		0,
-		nullptr,
-		0,
-		BCRYPT_HASH_REUSABLE_FLAG)))
-	{
-		wprintf(L"[!] Error 0x%lx BCryptCreateHash\n", this->Status);
-		return;
-	}
-
-
-	this->Status = STATUS_SUCCESS;
-}
-
-
-
-std::wstring Md5Hash::HashData(__in PUCHAR data, __in ULONG szData)
-{
-	this->Status = STATUS_UNSUCCESSFUL;
-	PWSTR hashStr = nullptr;
-	// The BCryptHashData function performs a one way md5_hash or Message Authentication Code (MAC) on a data buffer.
-	if (!NT_SUCCESS(this->Status = BCryptHashData(
-		this->hHash,
-		data,
-		szData,
-		0)))
-	{
-		wprintf(L"[!] Error 0x%lx BCryptHashData\n", this->Status);
-		return hashStr;
-	}
-
-
-	this->pbHash = static_cast<PBYTE>(HeapAlloc(GetProcessHeap(), 0, this->cbHash));
-	if (nullptr == this->pbHash)
-	{
-		wprintf(L"[!] HeapAlloc failed\n");
-		return hashStr;
-	}
-
-
-	// The BCryptFinishHash function retrieves the md5_hash or Message Authentication Code (MAC) value for the data accumulated from prior calls to BCryptHashData.
-	if (!NT_SUCCESS(this->Status = BCryptFinishHash(
-		this->hHash,
-		this->pbHash,
-		this->cbHash,
-		0)))
-	{
-		wprintf(L"[!] Error 0x%lx BCryptFinishHash\n", this->Status);
-		return hashStr;
-	}
-
-	const DWORD dwFlags = CRYPT_STRING_HEXRAW | CRYPT_STRING_NOCRLF;
-	DWORD cchString{};
-	// The CryptBinaryToString function converts an array of bytes into a formatted string.
-	if (CryptBinaryToStringW(this->pbHash, this->cbHash, dwFlags, nullptr, &cchString))
-	{
-		hashStr = static_cast<PWSTR>(HeapAlloc(GetProcessHeap(), 0, cchString * sizeof(WCHAR)));
-		if (hashStr)
-		{
-			if (CryptBinaryToStringW(this->pbHash, this->cbHash, dwFlags, hashStr, &cchString))
-			{
-				return hashStr;
-			}
-		}
-	}
-
-	HeapFree(GetProcessHeap(), 0, this->pbHash);
-	return hashStr;
-}
-
-Md5Hash::~Md5Hash()
-{
-	if (this->phAlgorithm)
-	{
-		BCryptCloseAlgorithmProvider(this->phAlgorithm, 0);
-	}
-	if (this->pbHashObject)
-	{
-		HeapFree(GetProcessHeap(), 0, this->pbHashObject);
-	}
-	if (this->pbHash)
-	{
-		HeapFree(GetProcessHeap(), 0, this->pbHash);
-	}
-	if (this->hHash)
-	{
-		BCryptDestroyHash(this->hHash);
-	}
 }

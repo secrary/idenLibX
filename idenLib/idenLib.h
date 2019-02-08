@@ -6,12 +6,8 @@
 #include <sstream>
 #include <iterator>
 #include <Zydis/Zydis.h>
-#include <filesystem>
+#include "compression.h"
 
-namespace fs = std::experimental::filesystem;
-
-#pragma comment(lib, "bcrypt")
-#pragma comment(lib, "crypt32")
 #pragma comment(lib, "Zydis")
 
 
@@ -29,19 +25,3 @@ enum {
 };
 
 bool cbIdenLib(int argc, char* argv[]);
-
-class Md5Hash
-{
-	BCRYPT_ALG_HANDLE phAlgorithm;
-	PBYTE pbHashObject;
-	PBYTE pbHash;
-	BCRYPT_HASH_HANDLE hHash;
-	DWORD cbHash;
-
-public:
-	NTSTATUS Status;
-	Md5Hash();
-	std::wstring HashData(__in PUCHAR data, __in ULONG szData);
-
-	~Md5Hash();
-};

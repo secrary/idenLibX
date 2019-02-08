@@ -284,6 +284,9 @@
     <ClInclude Include="idenLib.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="compression.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <Library Include="pluginsdk\x32bridge.lib">
@@ -349,6 +352,9 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="idenLib.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="compression.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
