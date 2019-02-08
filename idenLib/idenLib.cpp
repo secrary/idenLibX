@@ -123,7 +123,13 @@ bool cbIdenLib(int argc, char * argv[])
 		const auto codeStart = moduleBase + fList[i].rvaStart;
 		if (DbgGetLabelAt(codeStart, SEG_DEFAULT, funcName)) {
 
-			const auto codeSize = fList[i].rvaEnd - fList[i].rvaStart + 1;
+			auto codeSize = fList[i].rvaEnd - fList[i].rvaStart + 1;
+			if (codeSize < MIN_FUNC_SIZE)
+				continue;
+			if (codeSize > MAX_FUNC_SIZE)
+			{
+				codeSize = MAX_FUNC_SIZE;
+			}
 
 			std::string fName{ funcName };
 			PBYTE opcodeBuf = nullptr;
