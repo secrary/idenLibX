@@ -42,7 +42,7 @@ void Split(__in const std::string& str, __out std::vector<std::string>& cont)
 		std::back_inserter(cont));
 }
 
-bool getSig(fs::path& sigPath, std::unordered_map<std::wstring, std::wstring> &funcSignature)
+bool getSig(fs::path& sigPath, std::unordered_map<std::string, std::string> &funcSignature)
 {
 	PBYTE decompressedData = nullptr;
 	if (!DecompressFile(sigPath, decompressedData) || !decompressedData)
@@ -62,25 +62,28 @@ bool getSig(fs::path& sigPath, std::unordered_map<std::wstring, std::wstring> &f
 		}
 		// vec[0] opcode
 		// vec[1] name
-		std::wstring wOpcodeStr(vec[0].begin(), vec[0].end());
-		std::wstring wNameStr(vec[1].begin(), vec[1].end());
-		funcSignature[wOpcodeStr] = wNameStr;
+		funcSignature[vec[0]] = vec[1];
 		line = strtok_s(nullptr, seps, &next_token);
 	}
 
-	if (decompressedData)
-		delete[] decompressedData;
+
+	delete[] decompressedData;
 
 	return true;
 }
 
 bool cbIdenLib(int argc, char * argv[])
 {
+	if (!DbgIsDebugging())
+	{
+		_plugin_logprintf("[idenLib] The debugger is not running!\n");
+		return false;
+	}
 	DbgCmdExecDirect("analyze"); // Do function analysis.
 	DbgCmdExecDirect("analyse_nukem"); // Do function analysis using nukem’s algorithm.
 
 	size_t counter = 0;
-	std::unordered_map<std::wstring, std::wstring> funcSignature;
+	std::unordered_map<std::string, std::string> funcSignature;
 	ListInfo functionList{};
 	if (!Script::Function::GetList(&functionList)) {
 		return false;
@@ -148,11 +151,9 @@ bool cbIdenLib(int argc, char * argv[])
 			if (GetOpcodeBuf(moduleMemory + fList[i].rvaStart, codeSize, opcodesBuf) && opcodesBuf)
 			{
 				std::string cOpcodes{ opcodesBuf };
-				std::wstring wOpcodes{ cOpcodes.begin(), cOpcodes.end() };
-				if (funcSignature.find(wOpcodes) != funcSignature.end())
+				if (funcSignature.find(cOpcodes) != funcSignature.end())
 				{
-					std::string currFuncName{ funcSignature[wOpcodes].begin(), funcSignature[wOpcodes].end() };
-					DbgSetAutoLabelAt(codeStart, currFuncName.c_str());
+					DbgSetAutoLabelAt(codeStart, funcSignature[cOpcodes].c_str());
 					counter++;
 				}
 
