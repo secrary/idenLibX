@@ -5,10 +5,9 @@
 #include <istream>
 #include <sstream>
 #include <iterator>
-#include <Zydis/Zydis.h>
 #include "compression.h"
 
-#pragma comment(lib, "Zydis")
+
 
 
 #define SymExDir "SymEx"
