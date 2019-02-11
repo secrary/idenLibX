@@ -28,7 +28,10 @@ bool GetOpcodeBuf(__in PBYTE funcVa, __in SIZE_T length, __out PCHAR& opcodesBuf
 
 		offset += instruction.length;
 	}
-	opcodesBuf = static_cast<PCHAR>(realloc(opcodesBuf, counter + 1)); // +1 for 0x00
+	auto tmpPtr = static_cast<PCHAR>(realloc(opcodesBuf, counter + 1)); // +1 for 0x00
+	if (!tmpPtr)
+		return false;
+	opcodesBuf = tmpPtr;
 
 	return counter != 0;
 }
@@ -96,14 +99,14 @@ bool cbIdenLib(int argc, char * argv[])
 
 	if (!DbgMemRead(moduleBase, moduleMemory, moduleSize))
 	{
-		_plugin_logprintf("Couldn't read process memory for scan\n");
+		_plugin_logprintf("[idenLib - FAILED] Couldn't read process memory for scan\n");
 		return false;
 	}
 
 	const fs::path sigFolder{ SymExDir };
 	if (!fs::exists(sigFolder)) {
 		const auto path = fs::absolute(sigFolder).string().c_str();
-		GuiAddLogMessage("[idenLib] Following path does not exist:");
+		GuiAddLogMessage("[idenLib - FAILED] Following path does not exist:");
 		GuiAddLogMessage(path);
 		return false;
 	}
@@ -124,7 +127,10 @@ bool cbIdenLib(int argc, char * argv[])
 				continue;
 			}
 
-			getSig(currentPath, funcSignature);
+			if (currentPath.extension().compare(SIG_EXT) == 0)
+			{
+				getSig(currentPath, funcSignature);
+			}
 
 		}
 	}
@@ -165,7 +171,7 @@ bool cbIdenLib(int argc, char * argv[])
 	}
 
 	char msg[0x100]{};
-	sprintf_s(msg, "\n[idenLib] Applied to %d function(s)\n", counter);
+	sprintf_s(msg, "\n[idenLib] Applied to %zd function(s)\n", counter);
 	GuiAddLogMessage(msg);
 
 	Script::Misc::Free(moduleMemory);

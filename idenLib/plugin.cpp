@@ -45,6 +45,6 @@ void pluginSetup()
 
 	_plugin_menuseticon(hMenu, &menuIcon);
 	_plugin_menuaddentry(hMenu, IDEN_LIB, "&Library Identification");
-	_plugin_menuaddentry(hMenu, ABOUT, "&About...");
+	_plugin_menuaddentry(hMenu, ABOUT, "&About");
 
 }
