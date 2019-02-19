@@ -175,16 +175,17 @@ bool cbIdenLib(int argc, char * argv[])
 		if (GetOpcodeBuf(moduleMemory + fList[i].rvaStart, codeSize, opcodesBuf) && opcodesBuf)
 		{
 			std::string cOpcodes{ opcodesBuf };
-
+			GuiAddLogMessage(cOpcodes.c_str());
+			GuiAddLogMessage("\n");
 			if (funcSignature.find(cOpcodes) != funcSignature.end())
 			{
 				DbgSetAutoLabelAt(codeStart, funcSignature[cOpcodes].c_str());
 				counter++;
 			}
-			if (cOpcodes.find("89895783b9e8") != std::string::npos)
-			{
-				GuiAddLogMessage(cOpcodes.c_str());
-			}
+			//if (cOpcodes.find("6a68e86ae85984843288") != std::string::npos)
+			//{
+			//	GuiAddLogMessage(cOpcodes.c_str());
+			//}
 			if (mainSig.find(cOpcodes) != mainSig.end()) // "main" func caller
 			{
 				GuiAddLogMessage("xxxxxxxxxxxxxxxx");
