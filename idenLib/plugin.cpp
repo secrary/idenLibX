@@ -1,4 +1,3 @@
-#include "plugin.h"
 #include "idenLib.h"
 
 PLUG_EXPORT void CBMENUENTRY(CBTYPE cbType, PLUG_CB_MENUENTRY* info)

@@ -1,13 +1,6 @@
 #pragma once
 
 #include "plugin.h"
-#include <fstream>
-#include <istream>
-#include <sstream>
-#include <iterator>
-#include "compression.h"
-
-
 
 
 #define SymExDir "SymEx"
@@ -17,6 +10,7 @@
 
 #define MIN_FUNC_SIZE 0x20
 #define MAX_FUNC_SIZE 0x100
+
 
 enum {
 	IDEN_LIB,

@@ -22,6 +22,8 @@
 
 #include "pluginsdk/capstone/capstone.h"
 #include "pluginsdk/DeviceNameResolver/DeviceNameResolver.h"
+#pragma once
+
 #include "pluginsdk/jansson/jansson.h"
 #include "pluginsdk/lz4/lz4file.h"
 #include "pluginsdk/TitanEngine/TitanEngine.h"

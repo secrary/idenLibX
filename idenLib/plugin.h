@@ -2,9 +2,13 @@
 
 #include "pluginmain.h"
 
-
-#include <filesystem>
 #include <Windows.h>
+#include <filesystem>
+#include <fstream>
+#include <istream>
+#include <sstream>
+#include <iterator>
+#include <tuple>
 
 #include "Zydis/Zydis.h"
 
