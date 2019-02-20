@@ -5,6 +5,7 @@
 std::unordered_map<std::string, std::tuple<std::string, size_t, signed long>> mainSig;
 
 _Success_(return)
+
 bool GetOpcodeBuf(__in PBYTE funcVa, __in SIZE_T length, __out PCHAR& opcodesBuf)
 {
 	ZydisDecoder decoder;
@@ -21,7 +22,7 @@ bool GetOpcodeBuf(__in PBYTE funcVa, __in SIZE_T length, __out PCHAR& opcodesBuf
 		return false;
 	}
 	SIZE_T counter = 0;
-	while (ZYAN_SUCCESS(ZydisDecoderDecodeBuffer(&decoder, funcVa + offset, length - offset,
+	while (		ZYAN_SUCCESS(ZydisDecoderDecodeBuffer(&decoder, funcVa + offset, length - offset,
 		&instruction)))
 	{
 		CHAR opcode[3];
@@ -45,11 +46,11 @@ void Split(__in const std::string& str, __out std::vector<std::string>& cont)
 {
 	std::istringstream iss(str);
 	std::copy(std::istream_iterator<std::string>(iss),
-		std::istream_iterator<std::string>(),
-		std::back_inserter(cont));
+	          std::istream_iterator<std::string>(),
+	          std::back_inserter(cont));
 }
 
-bool getSig(fs::path& sigPath, std::unordered_map<std::string, std::string> &funcSignature)
+bool getSig(fs::path& sigPath, std::unordered_map<std::string, std::string>& funcSignature)
 {
 	PBYTE decompressedData = nullptr;
 	if (!DecompressFile(sigPath, decompressedData) || !decompressedData)
@@ -86,7 +87,6 @@ bool getSig(fs::path& sigPath, std::unordered_map<std::string, std::string> &fun
 
 				mainSig[opcodeString] = std::make_tuple(vec[1], fromFunc, fromEP);
 			}
-			
 		}
 		else
 		{
@@ -101,7 +101,7 @@ bool getSig(fs::path& sigPath, std::unordered_map<std::string, std::string> &fun
 	return true;
 }
 
-bool cbIdenLib(int argc, char * argv[])
+bool cbIdenLib(int argc, char* argv[])
 {
 	if (!DbgIsDebugging())
 	{
@@ -114,7 +114,8 @@ bool cbIdenLib(int argc, char * argv[])
 	size_t counter = 0;
 	std::unordered_map<std::string, std::string> funcSignature;
 	ListInfo functionList{};
-	if (!Script::Function::GetList(&functionList)) {
+	if (!Script::Function::GetList(&functionList))
+	{
 		return false;
 	}
 	const auto fList = static_cast<Script::Function::FunctionInfo *>(functionList.data);
@@ -129,9 +130,10 @@ bool cbIdenLib(int argc, char * argv[])
 		return false;
 	}
 
-	const fs::path sigFolder{ SymExDir };
-	if (!fs::exists(sigFolder)) {
-		const auto path = fs::absolute(sigFolder).string().c_str();
+	const fs::path sigFolder{SymExDir};
+	if (!exists(sigFolder))
+	{
+		const auto path = absolute(sigFolder).string().c_str();
 		GuiAddLogMessage("[idenLib - FAILED] Following path does not exist:");
 		GuiAddLogMessage(path);
 		return false;
@@ -146,7 +148,7 @@ bool cbIdenLib(int argc, char * argv[])
 			continue;
 		}
 		auto currentPath = p.path();
-		if (fs::is_regular_file(currentPath, ec))
+		if (is_regular_file(currentPath, ec))
 		{
 			if (ec.value() != STATUS_SUCCESS)
 			{
@@ -157,7 +159,6 @@ bool cbIdenLib(int argc, char * argv[])
 			{
 				getSig(currentPath, funcSignature);
 			}
-
 		}
 	}
 
@@ -180,7 +181,7 @@ bool cbIdenLib(int argc, char * argv[])
 		if (GetOpcodeBuf(codeStartMod, codeSize, opcodesBuf) && opcodesBuf)
 		{
 			// library functions
-			std::string cOpcodes{ opcodesBuf };
+			std::string cOpcodes{opcodesBuf};
 			if (funcSignature.find(cOpcodes) != funcSignature.end())
 			{
 				DbgSetAutoLabelAt(codeStart, funcSignature[cOpcodes].c_str());
@@ -196,7 +197,7 @@ bool cbIdenLib(int argc, char * argv[])
 				ZydisDecoder decoder;
 
 				ZydisDecoderInit(&decoder, ZYDIS_MODE, ZYDIS_ADDRESS_WIDTH);
-				if (ZYAN_SUCCESS(ZydisDecoderDecodeBuffer(&decoder, callInstr, codeSize,
+				if (					ZYAN_SUCCESS(ZydisDecoderDecodeBuffer(&decoder, callInstr, codeSize,
 					&instruction)))
 				{
 					if (instruction.mnemonic == ZYDIS_MNEMONIC_CALL)
@@ -204,7 +205,8 @@ bool cbIdenLib(int argc, char * argv[])
 						auto& callOperand = instruction.operands[0];
 						ZyanU64 callVa{};
 						auto instr = reinterpret_cast<ZyanU64>(callInstr);
-						if (callOperand.type == ZYDIS_OPERAND_TYPE_IMMEDIATE && callOperand.imm.is_relative &&				ZYAN_SUCCESS(
+						if (callOperand.type == ZYDIS_OPERAND_TYPE_IMMEDIATE && callOperand.imm.is_relative &&
+							ZYAN_SUCCESS(
 							ZydisCalcAbsoluteAddress(&instruction, &callOperand, instr, &callVa)))
 						{
 							auto realCallVa = callVa - reinterpret_cast<DWORD_PTR>(codeStartMod) + codeStart;
@@ -218,13 +220,52 @@ bool cbIdenLib(int argc, char * argv[])
 
 			free(opcodesBuf);
 		}
-
 	}
 
 	// Alternative way to recognize a main function
 	if (!mainDetected)
 	{
-		
+		DWORD_PTR EPAddress = Script::Module::GetMainModuleEntry();
+		DWORD_PTR EPAddressMod = EPAddress - moduleBase + reinterpret_cast<DWORD_PTR>(moduleMemory);
+		for (const auto& sig : mainSig)
+		{
+			DWORD_PTR callInstr = std::get<2>(sig.second) + EPAddressMod;
+			auto mainOp = sig.first.c_str();
+			ZydisDecodedInstruction instruction;
+			ZydisDecoder decoder;
+
+			ZydisDecoderInit(&decoder, ZYDIS_MODE, ZYDIS_ADDRESS_WIDTH);
+			if (				ZYAN_SUCCESS(ZydisDecoderDecodeBuffer(&decoder, reinterpret_cast<PVOID>(callInstr), MAX_FUNC_SIZE,
+				&instruction)))
+			{
+				if (instruction.mnemonic == ZYDIS_MNEMONIC_CALL)
+				{
+					auto fromFunc = std::get<1>(sig.second);
+					auto funcStart = callInstr - fromFunc;
+					PCHAR opcodesBuf = nullptr;
+					if (GetOpcodeBuf(reinterpret_cast<PBYTE>(funcStart), MAX_FUNC_SIZE, opcodesBuf) && opcodesBuf)
+					{
+						if (!strncmp(opcodesBuf, mainOp, strlen(mainOp)))
+						{
+							auto& callOperand = instruction.operands[0];
+							ZyanU64 callVa{};
+							auto instr = static_cast<ZyanU64>(callInstr);
+							if (callOperand.type == ZYDIS_OPERAND_TYPE_IMMEDIATE && callOperand.imm.is_relative &&
+								ZYAN_SUCCESS(
+								ZydisCalcAbsoluteAddress(&instruction, &callOperand, instr, &callVa)))
+							{
+								auto realCallVa = callVa - reinterpret_cast<DWORD_PTR>(moduleMemory) + moduleBase;
+								DbgSetAutoLabelAt(realCallVa, std::get<0>(sig.second).c_str());
+								counter++;
+								mainDetected = true;
+								break;
+							}
+						}
+						free(opcodesBuf);
+					}
+				}
+			}
+		}
 	}
 
 	char msg[0x100]{};
