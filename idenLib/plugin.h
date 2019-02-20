@@ -21,7 +21,7 @@ namespace fs = std::filesystem;
 //plugin data
 #define PLUGIN_NAME "idenLib"
 #define PLUGIN_VERSION 1
-#define PLUGIN_VERSION_STR "0.3"
+#define PLUGIN_VERSION_STR "0.4"
 
 #define DEFAULT_COMPRESS_LEVEL 3
 
