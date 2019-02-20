@@ -2,7 +2,7 @@
 #include "compression.h"
 
 
-std::unordered_map<std::string, std::tuple<std::string, size_t>> mainSig;
+std::unordered_map<std::string, std::tuple<std::string, size_t, signed long>> mainSig;
 
 _Success_(return)
 bool GetOpcodeBuf(__in PBYTE funcVa, __in SIZE_T length, __out PCHAR& opcodesBuf)
@@ -75,11 +75,18 @@ bool getSig(fs::path& sigPath, std::unordered_map<std::string, std::string> &fun
 		if (std::string::npos != isMain) // it's main
 		{
 			auto indexStr = std::string(vec[0].begin() + isMain + 1, vec[0].end());
-			size_t index = std::stoi(indexStr);
 			auto opcodeString = std::string(vec[0].begin(), vec[0].begin() + isMain);
+			auto isEP = indexStr.find('!');
+			if (std::string::npos != isEP)
+			{
+				auto fromEPStr = std::string(indexStr.begin() + isEP + 1, indexStr.end());
+				auto fromFuncStr = std::string(indexStr.begin(), indexStr.begin() + isEP);
+				signed long fromEP = std::stoi(fromEPStr);
+				size_t fromFunc = std::stoi(fromFuncStr);
 
-			mainSig[opcodeString] = std::make_tuple(vec[1], index);
-			//GuiAddLogMessage(opcodeString.c_str());
+				mainSig[opcodeString] = std::make_tuple(vec[1], fromFunc, fromEP);
+			}
+			
 		}
 		else
 		{
@@ -155,7 +162,7 @@ bool cbIdenLib(int argc, char * argv[])
 	}
 
 	// apply sig
-	CHAR funcName[MAX_LABEL_SIZE]{};
+	auto mainDetected = false;
 	for (auto i = 0; i < functionList.count; i++)
 	{
 		const auto codeStart = moduleBase + fList[i].rvaStart;
@@ -168,41 +175,56 @@ bool cbIdenLib(int argc, char * argv[])
 			codeSize = MAX_FUNC_SIZE;
 		}
 
-		std::string fName{ funcName };
 		PCHAR opcodesBuf = nullptr;
-		DWORD sizeofBuf = 0;
-
-		if (GetOpcodeBuf(moduleMemory + fList[i].rvaStart, codeSize, opcodesBuf) && opcodesBuf)
+		auto codeStartMod = moduleMemory + fList[i].rvaStart;
+		if (GetOpcodeBuf(codeStartMod, codeSize, opcodesBuf) && opcodesBuf)
 		{
+			// library functions
 			std::string cOpcodes{ opcodesBuf };
-			GuiAddLogMessage(cOpcodes.c_str());
-			GuiAddLogMessage("\n");
 			if (funcSignature.find(cOpcodes) != funcSignature.end())
 			{
 				DbgSetAutoLabelAt(codeStart, funcSignature[cOpcodes].c_str());
 				counter++;
 			}
-			//if (cOpcodes.find("6a68e86ae85984843288") != std::string::npos)
-			//{
-			//	GuiAddLogMessage(cOpcodes.c_str());
-			//}
-			if (mainSig.find(cOpcodes) != mainSig.end()) // "main" func caller
+
+			// "main" function
+			if (!mainDetected && mainSig.find(cOpcodes) != mainSig.end()) // "main" func caller
 			{
-				GuiAddLogMessage("xxxxxxxxxxxxxxxx");
+				auto callInstr = codeStartMod + std::get<1>(mainSig[cOpcodes]);
+
 				ZydisDecodedInstruction instruction;
 				ZydisDecoder decoder;
 
 				ZydisDecoderInit(&decoder, ZYDIS_MODE, ZYDIS_ADDRESS_WIDTH);
-				if (ZYAN_SUCCESS(ZydisDecoderDecodeBuffer(&decoder, reinterpret_cast<PVOID>(codeStart + std::get<1>(mainSig[cOpcodes])), codeSize,
+				if (ZYAN_SUCCESS(ZydisDecoderDecodeBuffer(&decoder, callInstr, codeSize,
 					&instruction)))
 				{
-					GuiAddLogMessage("xxxxxxxxxxxxxxxx");
+					if (instruction.mnemonic == ZYDIS_MNEMONIC_CALL)
+					{
+						auto& callOperand = instruction.operands[0];
+						ZyanU64 callVa{};
+						auto instr = reinterpret_cast<ZyanU64>(callInstr);
+						if (callOperand.type == ZYDIS_OPERAND_TYPE_IMMEDIATE && callOperand.imm.is_relative &&				ZYAN_SUCCESS(
+							ZydisCalcAbsoluteAddress(&instruction, &callOperand, instr, &callVa)))
+						{
+							auto realCallVa = callVa - reinterpret_cast<DWORD_PTR>(codeStartMod) + codeStart;
+							DbgSetAutoLabelAt(realCallVa, std::get<0>(mainSig[cOpcodes]).c_str());
+							counter++;
+							mainDetected = true;
+						}
+					}
 				}
 			}
 
 			free(opcodesBuf);
 		}
 
+	}
+
+	// Alternative way to recognize a main function
+	if (!mainDetected)
+	{
+		
 	}
 
 	char msg[0x100]{};
