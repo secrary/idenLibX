@@ -7,4 +7,5 @@
 ## Credits
 - Disassembly powered by [Zydis](https://zydis.re)
 - Compression/Decompression by [zstd](https://github.com/facebook/zstd)
+- Serialization by [Cereal](https://github.com/USCiLab/cereal)
 - Icon by [freepik](https://www.flaticon.com/authors/freepik)
