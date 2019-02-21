@@ -72,22 +72,22 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <TargetExt>.dp32</TargetExt>
     <OutDir>$(SolutionDir)bin\x32\</OutDir>
-    <IncludePath>$(ProjectDir)..\idenLib\dependencies\zydis\msvc;$(ProjectDir)..\idenLib\dependencies\zydis\include;$(ProjectDir)..\idenLib\dependencies\zydis\dependencies\zycore\include;$(ProjectDir)..\idenLib\dependencies\zstd\lib;$(VC_IncludePath);$(WindowsSDK_IncludePath)</IncludePath>
+    <IncludePath>$(ProjectDir)..\idenLib\dependencies\cereal\include;$(ProjectDir)..\idenLib\dependencies\zydis\msvc;$(ProjectDir)..\idenLib\dependencies\zydis\include;$(ProjectDir)..\idenLib\dependencies\zydis\dependencies\zycore\include;$(ProjectDir)..\idenLib\dependencies\zstd\lib;$(VC_IncludePath);$(WindowsSDK_IncludePath)</IncludePath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <TargetExt>.dp32</TargetExt>
     <OutDir>$(SolutionDir)bin\x32d\</OutDir>
-    <IncludePath>$(ProjectDir)..\idenLib\dependencies\zydis\msvc;$(ProjectDir)..\idenLib\dependencies\zydis\include;$(ProjectDir)..\idenLib\dependencies\zydis\dependencies\zycore\include;$(ProjectDir)..\idenLib\dependencies\zstd\lib;$(VC_IncludePath);$(WindowsSDK_IncludePath)</IncludePath>
+    <IncludePath>$(ProjectDir)..\idenLib\dependencies\cereal\include;$(ProjectDir)..\idenLib\dependencies\zydis\msvc;$(ProjectDir)..\idenLib\dependencies\zydis\include;$(ProjectDir)..\idenLib\dependencies\zydis\dependencies\zycore\include;$(ProjectDir)..\idenLib\dependencies\zstd\lib;$(VC_IncludePath);$(WindowsSDK_IncludePath)</IncludePath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <TargetExt>.dp64</TargetExt>
     <OutDir>$(SolutionDir)bin\x64\</OutDir>
-    <IncludePath>$(ProjectDir)..\idenLib\dependencies\zydis\msvc;$(ProjectDir)..\idenLib\dependencies\zydis\include;$(ProjectDir)..\idenLib\dependencies\zydis\dependencies\zycore\include;$(ProjectDir)..\idenLib\dependencies\zstd\lib;$(VC_IncludePath);$(WindowsSDK_IncludePath)</IncludePath>
+    <IncludePath>$(ProjectDir)..\idenLib\dependencies\cereal\include;$(ProjectDir)..\idenLib\dependencies\zydis\msvc;$(ProjectDir)..\idenLib\dependencies\zydis\include;$(ProjectDir)..\idenLib\dependencies\zydis\dependencies\zycore\include;$(ProjectDir)..\idenLib\dependencies\zstd\lib;$(VC_IncludePath);$(WindowsSDK_IncludePath)</IncludePath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <TargetExt>.dp64</TargetExt>
     <OutDir>$(SolutionDir)bin\x64d\</OutDir>
-    <IncludePath>$(ProjectDir)..\idenLib\dependencies\zydis\msvc;$(ProjectDir)..\idenLib\dependencies\zydis\include;$(ProjectDir)..\idenLib\dependencies\zydis\dependencies\zycore\include;$(ProjectDir)..\idenLib\dependencies\zstd\lib;$(VC_IncludePath);$(WindowsSDK_IncludePath)</IncludePath>
+    <IncludePath>$(ProjectDir)..\idenLib\dependencies\cereal\include;$(ProjectDir)..\idenLib\dependencies\zydis\msvc;$(ProjectDir)..\idenLib\dependencies\zydis\include;$(ProjectDir)..\idenLib\dependencies\zydis\dependencies\zycore\include;$(ProjectDir)..\idenLib\dependencies\zstd\lib;$(VC_IncludePath);$(WindowsSDK_IncludePath)</IncludePath>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <ClCompile>

@@ -2,8 +2,8 @@
 #include "plugin.h"
 
 const char* projectInfo = "\n" PLUGIN_NAME " " PLUGIN_VERSION_STR
-						"\nLibrary Function Identification\n"
-						"Plugin by @_qaz_qaz (Lasha Khasaia)\n";
+	"\nLibrary Function Identification\n"
+	"Plugin by @_qaz_qaz (Lasha Khasaia)\n";
 
 int pluginHandle;
 HWND hwndDlg;
@@ -14,25 +14,25 @@ int hMenuStack;
 
 PLUG_EXPORT bool pluginit(PLUG_INITSTRUCT* initStruct)
 {
-    initStruct->pluginVersion = PLUGIN_VERSION;
-    initStruct->sdkVersion = PLUG_SDKVERSION;
-    strncpy_s(initStruct->pluginName, PLUGIN_NAME, _TRUNCATE);
-    pluginHandle = initStruct->pluginHandle;
-    return pluginInit(initStruct);
+	initStruct->pluginVersion = PLUGIN_VERSION;
+	initStruct->sdkVersion = PLUG_SDKVERSION;
+	strncpy_s(initStruct->pluginName, PLUGIN_NAME, _TRUNCATE);
+	pluginHandle = initStruct->pluginHandle;
+	return pluginInit(initStruct);
 }
 
 PLUG_EXPORT bool plugstop()
 {
-    pluginStop();
-    return true;
+	pluginStop();
+	return true;
 }
 
 PLUG_EXPORT void plugsetup(PLUG_SETUPSTRUCT* setupStruct)
 {
-    hwndDlg = setupStruct->hwndDlg;
-    hMenu = setupStruct->hMenu;
-    hMenuDisasm = setupStruct->hMenuDisasm;
-    hMenuDump = setupStruct->hMenuDump;
-    hMenuStack = setupStruct->hMenuStack;
-    pluginSetup();
+	hwndDlg = setupStruct->hwndDlg;
+	hMenu = setupStruct->hMenu;
+	hMenuDisasm = setupStruct->hMenuDisasm;
+	hMenuDump = setupStruct->hMenuDump;
+	hMenuStack = setupStruct->hMenuStack;
+	pluginSetup();
 }

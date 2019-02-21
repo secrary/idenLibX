@@ -1,7 +1,7 @@
 #include "idenLib.h"
 #include "compression.h"
 
-
+std::unordered_map<std::string, std::string> funcSignature;
 std::unordered_map<std::string, std::tuple<std::string, size_t, signed long>> mainSig;
 
 _Success_(return)
@@ -50,7 +50,7 @@ void Split(__in const std::string& str, __out std::vector<std::string>& cont)
 	          std::back_inserter(cont));
 }
 
-bool getSig(fs::path& sigPath, std::unordered_map<std::string, std::string>& funcSignature)
+bool getSig(__in const fs::path& sigPath)
 {
 	PBYTE decompressedData = nullptr;
 	if (!DecompressFile(sigPath, decompressedData) || !decompressedData)
@@ -101,22 +101,68 @@ bool getSig(fs::path& sigPath, std::unordered_map<std::string, std::string>& fun
 	return true;
 }
 
-bool cbIdenLib(int argc, char* argv[])
+void Analyze()
 {
-	if (!DbgIsDebugging())
-	{
-		_plugin_logprintf("[idenLib] The debugger is not running!\n");
-		return false;
-	}
 	DbgCmdExecDirect("analyze"); // Do function analysis.
 	DbgCmdExecDirect("analyse_nukem"); // Do function analysis using nukem’s algorithm.
+}
 
+void CacheSigs(const fs::path& cachePath, const fs::path& cachePathMain)
+{
+	auto funcFuture = std::async([](const fs::path& cachePath, const fs::path& cachePathMain)
+	{
+		std::ofstream is(cachePath, std::ios::binary);
+		cereal::BinaryOutputArchive archive(is);
+		archive(funcSignature);
+	}, cachePath, cachePathMain);
+
+	auto mainsFuture = std::async([](const fs::path& cachePath, const fs::path& cachePathMain)
+	{
+		std::ofstream isMain(cachePathMain, std::ios::binary);
+		cereal::BinaryOutputArchive archiveMain(isMain);
+		archiveMain(mainSig);
+	}, cachePath, cachePathMain);
+
+	// no need to wait...
+}
+
+void ParseSignatures(const fs::path& cachePath, const fs::path& cachePathMain)
+{
+	// else parse signature files
+	const fs::path sigDir{ SymExDir };
+	std::error_code ec{};
+	for (auto& p : fs::recursive_directory_iterator(sigDir, ec))
+	{
+		if (ec.value() != STATUS_SUCCESS)
+		{
+			continue;
+		}
+		const auto& currentPath = p.path();
+		if (is_regular_file(currentPath, ec))
+		{
+			if (ec.value() != STATUS_SUCCESS)
+			{
+				continue;
+			}
+
+			if (currentPath.extension().compare(SIG_EXT) == 0)
+			{
+				getSig(currentPath);
+			}
+		}
+	}
+	// cache it
+	CacheSigs(cachePath, cachePathMain);
+}
+
+void ProcessSignatures(const fs::path& sigFolder)
+{
 	size_t counter = 0;
-	std::unordered_map<std::string, std::string> funcSignature;
 	ListInfo functionList{};
 	if (!Script::Function::GetList(&functionList))
 	{
-		return false;
+		_plugin_logprintf("[idenLib - FAILED] Failed to get list of functions\n");
+		return;
 	}
 	const auto fList = static_cast<Script::Function::FunctionInfo *>(functionList.data);
 
@@ -127,39 +173,34 @@ bool cbIdenLib(int argc, char* argv[])
 	if (!DbgMemRead(moduleBase, moduleMemory, moduleSize))
 	{
 		_plugin_logprintf("[idenLib - FAILED] Couldn't read process memory for scan\n");
-		return false;
-	}
-
-	const fs::path sigFolder{SymExDir};
-	if (!exists(sigFolder))
-	{
-		const auto path = absolute(sigFolder).string().c_str();
-		GuiAddLogMessage("[idenLib - FAILED] Following path does not exist:");
-		GuiAddLogMessage(path);
-		return false;
+		return;
 	}
 
 	// get signatures
-	std::error_code ec{};
-	for (auto& p : fs::recursive_directory_iterator(sigFolder, ec))
-	{
-		if (ec.value() != STATUS_SUCCESS)
-		{
-			continue;
-		}
-		auto currentPath = p.path();
-		if (is_regular_file(currentPath, ec))
-		{
-			if (ec.value() != STATUS_SUCCESS)
-			{
-				continue;
-			}
+	// check if cache exists
+	fs::path cachePath = { SymExDir };
+	cachePath += "\\";
+	auto cachePathMain = cachePath;
+	cachePath += idenLibCache;
+	cachePathMain += idenLibCacheMain;
 
-			if (currentPath.extension().compare(SIG_EXT) == 0)
-			{
-				getSig(currentPath, funcSignature);
-			}
+	if (exists(cachePath))
+	{
+		{
+			std::ifstream is(cachePath, std::ios::binary);
+			cereal::BinaryInputArchive inputArchive(is);
+			inputArchive(funcSignature);
 		}
+		if (exists(cachePathMain))
+		{
+			std::ifstream is(cachePathMain, std::ios::binary);
+			cereal::BinaryInputArchive inputArchive(is);
+			inputArchive(mainSig);
+		}
+	}
+	else
+	{
+		ParseSignatures(cachePath, cachePathMain);
 	}
 
 	// apply sig
@@ -275,7 +316,49 @@ bool cbIdenLib(int argc, char* argv[])
 	Script::Misc::Free(moduleMemory);
 	BridgeFree(functionList.data);
 	GuiUpdateDisassemblyView();
+}
 
+bool cbIdenLib(int argc, char* argv[])
+{
+	if (!DbgIsDebugging())
+	{
+		_plugin_logprintf("[idenLib] The debugger is not running!\n");
+		return false;
+	}
+	const auto startTime = clock();
+
+	Analyze();
+
+	const fs::path sigFolder{SymExDir};
+	if (!exists(sigFolder))
+	{
+		const auto path = absolute(sigFolder).string().c_str();
+		GuiAddLogMessage("[idenLib - FAILED] Following path does not exist:");
+		GuiAddLogMessage(path);
+		return false;
+	}
+
+	ProcessSignatures(sigFolder);
+
+	const auto endTime = clock();
+
+	char msg[0x100]{};
+	sprintf_s(msg, "[idenLib] Time Wasted %f Seconds\n", (static_cast<double>(endTime) - startTime) / CLOCKS_PER_SEC);
+	GuiAddLogMessage(msg);
+
+	return true;
+}
+
+
+bool cbRefresh(int argc, char* argv[])
+{
+	// get signatures
+	fs::path cachePath = { SymExDir };
+	cachePath += "\\";
+	auto cachePathMain = cachePath;
+	cachePath += idenLibCache;
+	cachePathMain += idenLibCacheMain;
+	ParseSignatures(cachePath, cachePathMain);
 
 	return true;
 }

@@ -14,7 +14,9 @@
 
 enum {
 	IDEN_LIB,
+	IDEN_REFRESH,
 	ABOUT
 };
 
 bool cbIdenLib(int argc, char* argv[]);
+bool cbRefresh(int argc, char* argv[]);
