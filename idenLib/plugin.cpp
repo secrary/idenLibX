@@ -7,6 +7,9 @@ PLUG_EXPORT void CBMENUENTRY(CBTYPE cbType, PLUG_CB_MENUENTRY* info)
 	case IDEN_LIB:
 		cbIdenLib(0, nullptr);
 		break;
+	case IDEN_LIB_JACCARD:
+		IdenLibJaccard(0, nullptr);
+		break;
 	case IDEN_REFRESH:
 		cbRefresh(0, nullptr);
 		break;
@@ -49,6 +52,7 @@ void pluginSetup()
 
 	_plugin_menuseticon(hMenu, &menuIcon);
 	_plugin_menuaddentry(hMenu, IDEN_LIB, "&Library Identification");
+	_plugin_menuaddentry(hMenu, IDEN_LIB_JACCARD, "&Library Identification Using Cosine Similarity");
 	_plugin_menuaddentry(hMenu, IDEN_REFRESH, "&Refresh Signatures");
 	_plugin_menuaddentry(hMenu, ABOUT, "&About");
 }

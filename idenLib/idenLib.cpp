@@ -155,29 +155,8 @@ void ParseSignatures(const fs::path& cachePath, const fs::path& cachePathMain)
 	CacheSigs(cachePath, cachePathMain);
 }
 
-void ProcessSignatures(const fs::path& sigFolder)
+void getSignatures()
 {
-	size_t counter = 0;
-	ListInfo functionList{};
-	if (!Script::Function::GetList(&functionList))
-	{
-		_plugin_logprintf("[idenLib - FAILED] Failed to get list of functions\n");
-		return;
-	}
-	const auto fList = static_cast<Script::Function::FunctionInfo *>(functionList.data);
-
-	const auto moduleBase = Script::Module::GetMainModuleBase();
-	const auto moduleSize = DbgFunctions()->ModSizeFromAddr(moduleBase);
-	const auto moduleMemory = static_cast<PBYTE>(Script::Misc::Alloc(moduleSize));
-
-	if (!DbgMemRead(moduleBase, moduleMemory, moduleSize))
-	{
-		_plugin_logprintf("[idenLib - FAILED] Couldn't read process memory for scan\n");
-		return;
-	}
-
-	// get signatures
-	// check if cache exists
 	fs::path cachePath = { SymExDir };
 	cachePath += "\\";
 	auto cachePathMain = cachePath;
@@ -202,6 +181,32 @@ void ProcessSignatures(const fs::path& sigFolder)
 	{
 		ParseSignatures(cachePath, cachePathMain);
 	}
+}
+
+void ProcessSignatures()
+{
+	size_t counter = 0;
+	ListInfo functionList{};
+	if (!Script::Function::GetList(&functionList))
+	{
+		_plugin_logprintf("[idenLib - FAILED] Failed to get list of functions\n");
+		return;
+	}
+	const auto fList = static_cast<Script::Function::FunctionInfo *>(functionList.data);
+
+	const auto moduleBase = Script::Module::GetMainModuleBase();
+	const auto moduleSize = DbgFunctions()->ModSizeFromAddr(moduleBase);
+	const auto moduleMemory = static_cast<PBYTE>(Script::Misc::Alloc(moduleSize));
+
+	if (!DbgMemRead(moduleBase, moduleMemory, moduleSize))
+	{
+		_plugin_logprintf("[idenLib - FAILED] Couldn't read process memory for scan\n");
+		return;
+	}
+
+	// get signatures
+	// check if cache exists
+	getSignatures();
 
 	// apply sig
 	auto mainDetected = false;
@@ -318,6 +323,100 @@ void ProcessSignatures(const fs::path& sigFolder)
 	GuiUpdateDisassemblyView();
 }
 
+float JaccardSimilarity(const unsigned char* v1, const unsigned char* v2)
+{
+	uint8_t bitMap1[256]{};
+	uint8_t bitMap2[256]{};
+	for (auto i = 0; v1[i]; i++) {
+		bitMap1[v1[i]] = 1;
+	}
+	for (auto i = 0; v2[i]; i++) {
+		bitMap2[v2[i]] = 1;
+	}
+	auto in = 0;
+	auto un = 0;
+
+
+	for (auto i = 0; i < 256; i++) {
+		in += bitMap1[i] && bitMap2[i];
+		un += bitMap1[i] || bitMap2[i];
+	}
+
+	const auto jaccard = static_cast<float>(in) / un;
+
+	return jaccard;
+}
+
+
+void ProcessSignaturesJaccard()
+{
+	size_t counter = 0;
+	ListInfo functionList{};
+	if (!Script::Function::GetList(&functionList))
+	{
+		_plugin_logprintf("[idenLib - FAILED] Failed to get list of functions\n");
+		return;
+	}
+	const auto fList = static_cast<Script::Function::FunctionInfo *>(functionList.data);
+
+	const auto moduleBase = Script::Module::GetMainModuleBase();
+	const auto moduleSize = DbgFunctions()->ModSizeFromAddr(moduleBase);
+	const auto moduleMemory = static_cast<PBYTE>(Script::Misc::Alloc(moduleSize));
+
+	if (!DbgMemRead(moduleBase, moduleMemory, moduleSize))
+	{
+		_plugin_logprintf("[idenLib - FAILED] Couldn't read process memory for scan\n");
+		return;
+	}
+
+	// get signatures
+	// check if cache exists
+	getSignatures();
+
+	// apply sig
+	for (auto i = 0; i < functionList.count; i++)
+	{
+		const auto codeStart = moduleBase + fList[i].rvaStart;
+
+		auto codeSize = fList[i].rvaEnd - fList[i].rvaStart + 1;
+		if (codeSize < MIN_FUNC_SIZE)
+			continue;
+		if (codeSize > MAX_FUNC_SIZE)
+		{
+			codeSize = MAX_FUNC_SIZE;
+		}
+
+		PCHAR opcodesBuf = nullptr;
+		const auto codeStartMod = moduleMemory + fList[i].rvaStart;
+		if (GetOpcodeBuf(codeStartMod, codeSize, opcodesBuf) && opcodesBuf)
+		{
+			// library functions
+			std::string cOpcodes{ opcodesBuf };
+			std::vector<int> v1{ cOpcodes.begin(), cOpcodes.end() };
+			//DbgSetAutoLabelAt(codeStart, funcSignature[cOpcodes].c_str());
+			for (const auto& sig : funcSignature)
+			{
+				const auto JaccardResult = JaccardSimilarity();
+				if (JaccardResult >= )
+				{
+					DbgSetAutoLabelAt(codeStart, sig.second.c_str());
+					counter++;
+				}
+			}
+
+			free(opcodesBuf);
+		}
+	}
+
+	char msg[0x100]{};
+	sprintf_s(msg, "\n[idenLib - Cosine Similarity] Applied to %zd function(s)\n", counter);
+	GuiAddLogMessage(msg);
+
+	Script::Misc::Free(moduleMemory);
+	BridgeFree(functionList.data);
+	GuiUpdateDisassemblyView();
+}
+
 bool cbIdenLib(int argc, char* argv[])
 {
 	if (!DbgIsDebugging())
@@ -338,7 +437,7 @@ bool cbIdenLib(int argc, char* argv[])
 		return false;
 	}
 
-	ProcessSignatures(sigFolder);
+	ProcessSignatures();
 
 	const auto endTime = clock();
 
@@ -349,6 +448,36 @@ bool cbIdenLib(int argc, char* argv[])
 	return true;
 }
 
+bool IdenLibJaccard(int argc, char* argv[])
+{
+	if (!DbgIsDebugging())
+	{
+		_plugin_logprintf("[idenLib] The debugger is not running!\n");
+		return false;
+	}
+	const auto startTime = clock();
+
+	Analyze();
+
+	const fs::path sigFolder{ SymExDir };
+	if (!exists(sigFolder))
+	{
+		const auto path = absolute(sigFolder).string().c_str();
+		GuiAddLogMessage("[idenLib - FAILED] Following path does not exist:");
+		GuiAddLogMessage(path);
+		return false;
+	}
+
+	ProcessSignaturesJaccard();
+
+	const auto endTime = clock();
+
+	char msg[0x100]{};
+	sprintf_s(msg, "[idenLib] Time Wasted %f Seconds\n", (static_cast<double>(endTime) - startTime) / CLOCKS_PER_SEC);
+	GuiAddLogMessage(msg);
+
+	return true;
+}
 
 bool cbRefresh(int argc, char* argv[])
 {
