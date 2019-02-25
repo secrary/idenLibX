@@ -4,8 +4,27 @@
 std::unordered_map<std::string, std::string> funcSignature;
 std::unordered_map<std::string, std::tuple<std::string, size_t, signed long>> mainSig;
 
-_Success_(return)
+/* 
+ * example: 11abff03 => \x11\xab\xff\x03 
+ * caller: delete[] outPtr
+ * 
+ */
+uint8_t* ConvertToRawHexString(__in const std::string& inputStr)
+{
+	const auto outPtr = new uint8_t[inputStr.size() / 2 + 1]{};
+	if (!outPtr)
+		return nullptr;
+	auto tmpBuff = outPtr;
+	for (size_t i = 0; i < inputStr.size(); i += 2)
+	{
+		*(tmpBuff++) = std::strtoul(inputStr.substr(i, 2).c_str(), nullptr, 16);
+	};
+	tmpBuff = nullptr;
 
+	return outPtr;
+}
+
+_Success_(return)
 bool GetOpcodeBuf(__in PBYTE funcVa, __in SIZE_T length, __out PCHAR& opcodesBuf)
 {
 	ZydisDecoder decoder;
@@ -315,7 +334,7 @@ void ProcessSignatures()
 	}
 
 	char msg[0x100]{};
-	sprintf_s(msg, "\n[idenLib] Applied to %zd function(s)\n", counter);
+	sprintf_s(msg, "\n[idenLib - Exact Match] Applied to %zd function(s)\n", counter);
 	GuiAddLogMessage(msg);
 
 	Script::Misc::Free(moduleMemory);
@@ -323,7 +342,7 @@ void ProcessSignatures()
 	GuiUpdateDisassemblyView();
 }
 
-float JaccardSimilarity(const unsigned char* v1, const unsigned char* v2)
+float JaccardSimilarity(const uint8_t* v1, const uint8_t* v2)
 {
 	uint8_t bitMap1[256]{};
 	uint8_t bitMap2[256]{};
@@ -393,14 +412,28 @@ void ProcessSignaturesJaccard()
 			// library functions
 			std::string cOpcodes{ opcodesBuf };
 			std::vector<int> v1{ cOpcodes.begin(), cOpcodes.end() };
-			//DbgSetAutoLabelAt(codeStart, funcSignature[cOpcodes].c_str());
 			for (const auto& sig : funcSignature)
 			{
-				const auto JaccardResult = JaccardSimilarity();
-				if (JaccardResult >= )
+				const auto sigPtr = ConvertToRawHexString(sig.first);
+				const auto opcPtr = ConvertToRawHexString(cOpcodes);
+				if (sigPtr && opcPtr)
 				{
-					DbgSetAutoLabelAt(codeStart, sig.second.c_str());
-					counter++;
+					const auto jaccardResult = JaccardSimilarity(sigPtr, opcPtr);
+					if (jaccardResult >= JACCARD_DISTANCE)
+					{
+						DbgSetAutoLabelAt(codeStart, sig.second.c_str());
+						counter++;
+
+						///// for testing
+						//{
+						//	char msg[0x200]{};
+						//	char label_text[MAX_LABEL_SIZE] = "";
+						//	DbgGetLabelAt(codeStart, SEG_DEFAULT, label_text);
+						//	sprintf_s(msg, "[idenLib] old: %s new: %s\n", label_text, sig.second.c_str());
+						//	GuiAddLogMessage(msg);
+						//}
+
+					}
 				}
 			}
 
@@ -409,7 +442,7 @@ void ProcessSignaturesJaccard()
 	}
 
 	char msg[0x100]{};
-	sprintf_s(msg, "\n[idenLib - Cosine Similarity] Applied to %zd function(s)\n", counter);
+	sprintf_s(msg, "\n[idenLib - Jaccard Similarity] Applied to %zd function(s)\n", counter);
 	GuiAddLogMessage(msg);
 
 	Script::Misc::Free(moduleMemory);

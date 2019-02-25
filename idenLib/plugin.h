@@ -32,6 +32,7 @@ namespace fs = std::filesystem;
 #define PLUGIN_VERSION_STR "0.4"
 
 #define DEFAULT_COMPRESS_LEVEL 3
+#define JACCARD_DISTANCE 0.8
 
 #ifdef _WIN64
 #define ZYDIS_ADDRESS_WIDTH ZYDIS_ADDRESS_WIDTH_64

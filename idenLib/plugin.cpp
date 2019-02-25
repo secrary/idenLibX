@@ -51,8 +51,8 @@ void pluginSetup()
 	menuIcon.size = sizeof(menu_icon);
 
 	_plugin_menuseticon(hMenu, &menuIcon);
-	_plugin_menuaddentry(hMenu, IDEN_LIB, "&Library Identification");
-	_plugin_menuaddentry(hMenu, IDEN_LIB_JACCARD, "&Library Identification Using Cosine Similarity");
+	_plugin_menuaddentry(hMenu, IDEN_LIB, "&Library Identification - Exact Match");
+	_plugin_menuaddentry(hMenu, IDEN_LIB_JACCARD, "&Library Identification Using Jaccard Similarity");
 	_plugin_menuaddentry(hMenu, IDEN_REFRESH, "&Refresh Signatures");
 	_plugin_menuaddentry(hMenu, ABOUT, "&About");
 }
