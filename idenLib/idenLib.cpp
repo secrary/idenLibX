@@ -421,17 +421,18 @@ void ProcessSignaturesJaccard()
 					const auto jaccardResult = JaccardSimilarity(sigPtr, opcPtr);
 					if (jaccardResult >= JACCARD_DISTANCE)
 					{
-						DbgSetAutoLabelAt(codeStart, sig.second.c_str());
-						counter++;
-
-						///// for testing
+						/////// for testing
 						//{
-						//	char msg[0x200]{};
+						//	char msg[0x200 + MAX_LABEL_SIZE]{};
 						//	char label_text[MAX_LABEL_SIZE] = "";
 						//	DbgGetLabelAt(codeStart, SEG_DEFAULT, label_text);
 						//	sprintf_s(msg, "[idenLib] old: %s new: %s\n", label_text, sig.second.c_str());
 						//	GuiAddLogMessage(msg);
 						//}
+
+						DbgSetAutoLabelAt(codeStart, sig.second.c_str());
+						counter++;
+
 
 					}
 				}

@@ -52,7 +52,7 @@ void pluginSetup()
 
 	_plugin_menuseticon(hMenu, &menuIcon);
 	_plugin_menuaddentry(hMenu, IDEN_LIB, "&Library Identification - Exact Match");
-	_plugin_menuaddentry(hMenu, IDEN_LIB_JACCARD, "&Library Identification Using Jaccard Similarity");
+	_plugin_menuaddentry(hMenu, IDEN_LIB_JACCARD, "&Library Identification Using Jaccard Similarity (Slower && less accurate)");
 	_plugin_menuaddentry(hMenu, IDEN_REFRESH, "&Refresh Signatures");
 	_plugin_menuaddentry(hMenu, ABOUT, "&About");
 }
