@@ -1,6 +1,7 @@
 #include "idenLib.h"
 #include "compression.h"
 
+
 std::unordered_map<std::string, std::string> funcSignature;
 std::unordered_map<std::string, std::tuple<std::string, size_t, signed long>> mainSig;
 
@@ -414,6 +415,15 @@ void ProcessSignaturesJaccard()
 			std::vector<int> v1{ cOpcodes.begin(), cOpcodes.end() };
 			for (const auto& sig : funcSignature)
 			{
+				const int sigSize = sig.first.size();
+				const int opcSize = cOpcodes.size();
+				const auto diffSize = std::abs(sigSize - opcSize);
+				if (diffSize > 5)
+				{
+					free(opcodesBuf);
+					continue;
+				}
+
 				const auto sigPtr = ConvertToRawHexString(sig.first);
 				const auto opcPtr = ConvertToRawHexString(cOpcodes);
 				if (sigPtr && opcPtr)
@@ -421,14 +431,14 @@ void ProcessSignaturesJaccard()
 					const auto jaccardResult = JaccardSimilarity(sigPtr, opcPtr);
 					if (jaccardResult >= JACCARD_DISTANCE)
 					{
-						/////// for testing
-						//{
-						//	char msg[0x200 + MAX_LABEL_SIZE]{};
-						//	char label_text[MAX_LABEL_SIZE] = "";
-						//	DbgGetLabelAt(codeStart, SEG_DEFAULT, label_text);
-						//	sprintf_s(msg, "[idenLib] old: %s new: %s\n", label_text, sig.second.c_str());
-						//	GuiAddLogMessage(msg);
-						//}
+						///// for testing
+						{
+							char msg[0x200 + MAX_LABEL_SIZE]{};
+							char label_text[MAX_LABEL_SIZE] = "";
+							DbgGetLabelAt(codeStart, SEG_DEFAULT, label_text);
+							sprintf_s(msg, "\nold: %s new: %s\n%s : %s\n", label_text, sig.second.c_str(), sig.first.c_str(), cOpcodes.c_str());
+							GuiAddLogMessage(msg);
+						}
 
 						DbgSetAutoLabelAt(codeStart, sig.second.c_str());
 						counter++;
