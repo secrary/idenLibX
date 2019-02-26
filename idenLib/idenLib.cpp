@@ -1,13 +1,15 @@
 #include "idenLib.h"
 #include "compression.h"
 
-
-std::unordered_map<std::string, std::string> funcSignature;
+// opcodes, <name, numberOfBranches>
+std::unordered_map<std::string, std::tuple<std::string, int>> funcSignature;
+// opcodes, <name, instrsFromFunc, instrsFromEP>
 std::unordered_map<std::string, std::tuple<std::string, size_t, signed long>> mainSig;
+
+int nBranches{};
 
 /* 
  * example: 11abff03 => \x11\xab\xff\x03 
- * caller: delete[] outPtr
  * 
  */
 uint8_t* ConvertToRawHexString(__in const std::string& inputStr)
@@ -25,8 +27,21 @@ uint8_t* ConvertToRawHexString(__in const std::string& inputStr)
 	return outPtr;
 }
 
+std::vector<uint8_t> ConvertToRawHexVector(__in const std::string& inputStr)
+{
+	std::vector<uint8_t> vec;
+
+	for (size_t i = 0; i < inputStr.size(); i += 2)
+	{
+		const auto tmpChr = std::strtoul(inputStr.substr(i, 2).c_str(), nullptr, 16);
+		vec.push_back(tmpChr);
+	};
+
+	return vec;
+}
+
 _Success_(return)
-bool GetOpcodeBuf(__in PBYTE funcVa, __in SIZE_T length, __out PCHAR& opcodesBuf)
+bool GetOpcodeBuf(__in PBYTE funcVa, __in SIZE_T length, __out PCHAR& opcodesBuf, __in bool countBranches, __out int& cBranches)
 {
 	ZydisDecoder decoder;
 
@@ -34,6 +49,8 @@ bool GetOpcodeBuf(__in PBYTE funcVa, __in SIZE_T length, __out PCHAR& opcodesBuf
 
 	ZyanUSize offset = 0;
 	ZydisDecodedInstruction instruction;
+
+	cBranches = 0;
 
 	auto cSize = length * 2;
 	opcodesBuf = static_cast<PCHAR>(malloc(cSize)); // // we need to resize the buffer
@@ -50,6 +67,13 @@ bool GetOpcodeBuf(__in PBYTE funcVa, __in SIZE_T length, __out PCHAR& opcodesBuf
 
 		memcpy_s(opcodesBuf + counter, cSize - counter, opcode, sizeof(opcode));
 		counter += 2;
+
+		if (countBranches)
+		{
+			if (instruction.meta.branch_type != ZYDIS_BRANCH_TYPE_NONE) {
+				cBranches++;
+			}
+		}
 
 		offset += instruction.length;
 	}
@@ -93,6 +117,7 @@ bool getSig(__in const fs::path& sigPath)
 
 		// check "main"
 		auto isMain = vec[0].find('_');
+		auto isBranch = vec[0].find('+');
 		if (std::string::npos != isMain) // it's main
 		{
 			auto indexStr = std::string(vec[0].begin() + isMain + 1, vec[0].end());
@@ -108,9 +133,16 @@ bool getSig(__in const fs::path& sigPath)
 				mainSig[opcodeString] = std::make_tuple(vec[1], fromFunc, fromEP);
 			}
 		}
+		else if (std::string::npos != isBranch)
+		{
+			auto opcodes = std::string(vec[0].begin(), vec[0].begin() + isBranch);
+			auto strBranches = std::string(vec[0].begin() + isBranch + 1, vec[0].end());
+			auto nBranches = std::stoi(strBranches);
+			funcSignature[opcodes] = std::make_tuple(vec[1], nBranches);
+		}
 		else
 		{
-			funcSignature[vec[0]] = vec[1];
+			funcSignature[vec[0]] = std::make_tuple(vec[1], 0);
 		}
 		line = strtok_s(nullptr, seps, &next_token);
 	}
@@ -244,13 +276,13 @@ void ProcessSignatures()
 
 		PCHAR opcodesBuf = nullptr;
 		auto codeStartMod = moduleMemory + fList[i].rvaStart;
-		if (GetOpcodeBuf(codeStartMod, codeSize, opcodesBuf) && opcodesBuf)
+		if (GetOpcodeBuf(codeStartMod, codeSize, opcodesBuf, false, nBranches) && opcodesBuf)
 		{
 			// library functions
 			std::string cOpcodes{opcodesBuf};
 			if (funcSignature.find(cOpcodes) != funcSignature.end())
 			{
-				DbgSetAutoLabelAt(codeStart, funcSignature[cOpcodes].c_str());
+				DbgSetAutoLabelAt(codeStart, std::get<0>(funcSignature[cOpcodes]).c_str());
 				counter++;
 			}
 
@@ -309,7 +341,7 @@ void ProcessSignatures()
 					auto fromFunc = std::get<1>(sig.second);
 					auto funcStart = callInstr - fromFunc;
 					PCHAR opcodesBuf = nullptr;
-					if (GetOpcodeBuf(reinterpret_cast<PBYTE>(funcStart), MAX_FUNC_SIZE, opcodesBuf) && opcodesBuf)
+					if (GetOpcodeBuf(reinterpret_cast<PBYTE>(funcStart), MAX_FUNC_SIZE, opcodesBuf, false, nBranches) && opcodesBuf)
 					{
 						if (!strncmp(opcodesBuf, mainOp, strlen(mainOp)))
 						{
@@ -367,6 +399,39 @@ float JaccardSimilarity(const uint8_t* v1, const uint8_t* v2)
 	return jaccard;
 }
 
+double CosineSimilarity(std::vector<uint8_t> inputFirst, std::vector<uint8_t> inputSecond)
+{
+	auto mul = 0, d_a = 0, d_b = 0;
+
+	if (inputFirst.size() != inputSecond.size())
+	{
+		throw std::logic_error("Vector inputFirst and Vector inputSecond are not the same size");
+	}
+
+	// Prevent Division by zero
+	if (inputFirst.empty())
+	{
+		throw std::logic_error("Vector inputFirst and Vector inputSecond are empty");
+	}
+
+	auto B_iter = inputSecond.begin();
+	auto A_iter = inputFirst.begin();
+	for (; A_iter != inputFirst.end(); ++A_iter, ++B_iter)
+	{
+		mul += *A_iter * *B_iter;
+		d_a += *A_iter * *A_iter;
+		d_b += *B_iter * *B_iter;
+	}
+
+	if (d_a == 0 || d_b == 0)
+	{
+		throw std::logic_error(
+			"cosine similarity is not defined whenever one or both "
+			"input vectors are zero-vectors.");
+	}
+
+	return mul / (sqrt(d_a) * sqrt(d_b));
+}
 
 void ProcessSignaturesJaccard()
 {
@@ -408,13 +473,20 @@ void ProcessSignaturesJaccard()
 
 		PCHAR opcodesBuf = nullptr;
 		const auto codeStartMod = moduleMemory + fList[i].rvaStart;
-		if (GetOpcodeBuf(codeStartMod, codeSize, opcodesBuf) && opcodesBuf)
+		if (GetOpcodeBuf(codeStartMod, codeSize, opcodesBuf, true, nBranches) && opcodesBuf)
 		{
 			// library functions
 			std::string cOpcodes{ opcodesBuf };
-			std::vector<int> v1{ cOpcodes.begin(), cOpcodes.end() };
 			for (const auto& sig : funcSignature)
 			{
+				const auto& sigBranches = std::get<1>(sig.second);
+				const auto diffBranch = std::abs(sigBranches - nBranches);
+				if (diffBranch > 2)
+				{
+					free(opcodesBuf);
+					continue;
+				}
+
 				const int sigSize = sig.first.size();
 				const int opcSize = cOpcodes.size();
 				const auto diffSize = std::abs(sigSize - opcSize);
@@ -426,24 +498,35 @@ void ProcessSignaturesJaccard()
 
 				const auto sigPtr = ConvertToRawHexString(sig.first);
 				const auto opcPtr = ConvertToRawHexString(cOpcodes);
+
+				//auto sigVec = ConvertToRawHexVector(sig.first);
+				//auto opcVec = ConvertToRawHexVector(cOpcodes);
+
 				if (sigPtr && opcPtr)
 				{
+				
+					//if (sigVec.size() > opcVec.size())
+					//	opcVec.resize(sigVec.size());
+					//else
+					//	sigVec.resize(opcVec.size());
+					//const auto cosineResult = CosineSimilarity(sigVec, opcVec);
+
 					const auto jaccardResult = JaccardSimilarity(sigPtr, opcPtr);
 					if (jaccardResult >= JACCARD_DISTANCE)
 					{
-						///// for testing
-						{
-							char msg[0x200 + MAX_LABEL_SIZE]{};
-							char label_text[MAX_LABEL_SIZE] = "";
-							DbgGetLabelAt(codeStart, SEG_DEFAULT, label_text);
-							sprintf_s(msg, "\nold: %s new: %s\n%s : %s\n", label_text, sig.second.c_str(), sig.first.c_str(), cOpcodes.c_str());
-							GuiAddLogMessage(msg);
-						}
+						const auto& labelName = std::get<0>(sig.second);
 
-						DbgSetAutoLabelAt(codeStart, sig.second.c_str());
+						///////// for testing
+						//{
+						//	char msg[0x200 + MAX_LABEL_SIZE]{};
+						//	char label_text[MAX_LABEL_SIZE] = "";
+						//	DbgGetLabelAt(codeStart, SEG_DEFAULT, label_text);
+						//	sprintf_s(msg, "\nold: %s new: %s\n%s : %s\n", label_text, labelName.c_str(), sig.first.c_str(), cOpcodes.c_str());
+						//	GuiAddLogMessage(msg);
+						//}
+
+						DbgSetAutoLabelAt(codeStart, labelName.c_str());
 						counter++;
-
-
 					}
 				}
 			}
